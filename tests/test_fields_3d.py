@@ -40,8 +40,8 @@ import diagnostic
 # Parameters
 # ---------------------------------------------------------------------------
 
-L    = 50.0
-N3   = 32       # regular grid per axis for fast tests  (32³ = 32 768 pts)
+L    = 100.0     # domain size (m)
+N3   = 64       # regular grid per axis for fast tests  (64³ = 262 144 pts)
 N3_PLOT = 48    # slightly higher resolution for figures
 PHI  = 5.0
 SEED = 42
@@ -236,11 +236,20 @@ def test_3d_slices_figure(plot_dir):
 # ---------------------------------------------------------------------------
 
 def test_3d_variogram_figure(plot_dir):
-    """Empirical vs theoretical variogram for both models (--plots only)."""
+    """Empirical vs theoretical variogram for both models (--plots only).
+
+    Averages over N_VARIO_REAL realisations to reduce single-realisation noise,
+    and caps lags at L/3 to avoid the finite-domain bias that appears at larger
+    separations (few pairs, periodic-boundary artefacts).
+    """
     if plot_dir is None:
         pytest.skip("Pass --plots to generate the variogram figure.")
 
     import matplotlib.pyplot as plt
+
+    N_VARIO_REAL = 10          # enough to suppress noise, fast to compute
+    H_MAX_PLOT   = L / 3       # reliable lag range for a domain of size L
+    N_BINS_VARIO = 100
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     rng = np.random.default_rng(SEED)
@@ -250,29 +259,41 @@ def test_3d_variogram_figure(plot_dir):
         corr  = _make_corr(CorrClass)
         label = CorrClass.__name__.replace("Correlation", "")
 
-        pts   = np.column_stack([rng.uniform(0, L, 1500),
-                                  rng.uniform(0, L, 1500),
-                                  rng.uniform(0, L, 1500)])
-        field = grf.generate_grf(pts, corr, seed=SEED)
+        # Use the same random point set for all realisations
+        pts = np.column_stack([rng.uniform(0, L, 2000),
+                                rng.uniform(0, L, 2000),
+                                rng.uniform(0, L, 2000)])
 
-        h_emp, g_emp = diagnostic.empirical_variogram(pts, field,
-                                                       n_bins=30, n_sample=600)
-        h_th,  g_th  = diagnostic.theoretical_variogram(corr, h_max=h_emp.max())
+        g_sum = None
+        for i in range(N_VARIO_REAL):
+            field = grf.generate_grf(pts, corr, seed=SEED + i)
+            h_emp, g = diagnostic.empirical_variogram(
+                pts, field, n_bins=N_BINS_VARIO, n_sample=500)
+            if g_sum is None:
+                g_sum = np.zeros_like(g)
+            g_sum += g
+        g_avg = g_sum / N_VARIO_REAL
+
+        # Cap at H_MAX_PLOT – beyond this the estimator is unreliable
+        mask  = h_emp <= H_MAX_PLOT
+        h_th, g_th = diagnostic.theoretical_variogram(corr, h_max=H_MAX_PLOT)
 
         ax = axes[col]
-        ax.plot(h_emp, g_emp, "o", ms=5, color="steelblue",
-                label="empirical variogram")
-        ax.plot(h_th,  g_th,  "-", lw=2, color="crimson",
+        ax.plot(h_emp[mask], g_avg[mask], "o", ms=5, color="steelblue",
+                label=f"empirical (avg {N_VARIO_REAL} real.)")
+        ax.plot(h_th, g_th, "-", lw=2, color="crimson",
                 label="theoretical variogram")
         ax.axhline(corr.sigma ** 2, ls="--", color="gray", lw=1,
                    label=f"sill = σ²={corr.sigma**2}")
         ax.axvline(PHI, ls=":", color="orange", lw=1.5, label=f"φ = {PHI}")
+        ax.set_xlim(0, H_MAX_PLOT)
         ax.set_title(f"Variogram 3D – {label}  (φ={PHI})")
         ax.set_xlabel("lag h [m]"); ax.set_ylabel("γ(h)")
         ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
 
-    plt.suptitle(f"GRF 3D – empirical vs theoretical variogram  (L={L})",
-                 fontsize=12)
+    plt.suptitle(
+        f"GRF 3D – empirical vs theoretical variogram  (L={L}, avg {N_VARIO_REAL} real.)",
+        fontsize=12)
     plt.tight_layout()
     fpath = plot_dir / "test_3d_variogram.png"
     plt.savefig(fpath, dpi=150)
@@ -318,8 +339,3 @@ def test_3d_phi_figure(plot_dir):
     plt.savefig(fpath, dpi=150)
     plt.close()
     print(f"\n  Figure saved: {fpath}")
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------

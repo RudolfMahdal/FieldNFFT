@@ -13,7 +13,7 @@ import grf
 import diagnostic  # ✅ Import nového modulu s diagnostikou
 
 # Nastavení parametrů
-L, N, phi, seed = 100.0, 1024, 11.0, 42
+L, N, phi, seed = 100.0, 1024, 5.0, 42
 
 # Převod phi -> len_scale pro GSTools Gaussian
 # GSTools: C(r) = exp(-pi*r^2 / (4*ls^2)), naše: C(r) = exp(-r^2 / (2*phi^2))
@@ -76,7 +76,8 @@ for i in range(N_real):
             g_gs[bi]  += g[k]
             cnt_gs[bi] += 1
 
-g_nufft = np.divide(g_nufft, cnt_nufft, where=cnt_nufft > 0)
+mask_n = cnt_nufft > 0
+g_nufft[mask_n] = g_nufft[mask_n] / cnt_nufft[mask_n]
 g_gs    = np.divide(g_gs,    cnt_gs,    where=cnt_gs    > 0)
 
 # ✅ Využití nové funkce pro teoretickou křivku
@@ -102,16 +103,18 @@ field2d_nufft = griddata(pts_irr, f_irr2d, (xx, yy), method='linear')
 model2d    = gs.Gaussian(dim=2, var=1.0, len_scale=len_scale_gs)
 field2d_gs = gs.SRF(model2d, seed=seed).structured([g2, g2])
 
-h_max_2d  = L / 3
-n_bins_2d = 30
+h_max_2d  = L / 3   # L/3 shows finite-domain bias; L/5 stays in reliable range
+n_bins_2d = 100     # many bins so h_max filter captures ~14 bins (bin width ~2.8m for L=200)
 
-# ✅ Změna: volání z modulu diagnostic
-h_2d_nufft, g_2d_nufft = diagnostic.empirical_variogram(pts_irr, f_irr2d, n_bins=n_bins_2d)
+# ✅ Změna: volání z modulu diagnostic; zvýšený n_sample pro lepší pokrytí lagů
+h_2d_nufft, g_2d_nufft = diagnostic.empirical_variogram(
+    pts_irr, f_irr2d, n_bins=n_bins_2d, n_sample=2000)
 
 pts_reg  = np.column_stack([xx.ravel(), yy.ravel()])
 f_gs_reg = field2d_gs.ravel()
-# ✅ Změna: volání z modulu diagnostic
-h_2d_gs, g_2d_gs = diagnostic.empirical_variogram(pts_reg, f_gs_reg, n_bins=n_bins_2d)
+# ✅ Změna: volání z modulu diagnostic; zvýšený n_sample pro lepší pokrytí lagů
+h_2d_gs, g_2d_gs = diagnostic.empirical_variogram(
+    pts_reg, f_gs_reg, n_bins=n_bins_2d, n_sample=2000)
 
 mask_2d_n = h_2d_nufft <= h_max_2d
 mask_2d_g = h_2d_gs    <= h_max_2d
@@ -143,12 +146,17 @@ ax1.set_xlabel("h [m]"); ax1.set_ylabel("γ(h)"); ax1.set_xlim(0, h_max)
 ax1.legend(fontsize=8); ax1.grid(True, alpha=0.3)
 
 # GSTools vario_estimate (pro srovnání s vestavěnou funkcí)
-bin_c_gs, vario_gs_builtin = gs.vario_estimate([x], field_gs, bin_edges=bin_edges)
+# Note: single realisation – high variance at large lags is expected
+bin_edges_gs = np.linspace(0, h_max, n_bins + 1)
+bin_c_gs, vario_gs_builtin = gs.vario_estimate([x], field_gs, bin_edges=bin_edges_gs)
 ax2 = fig.add_subplot(layout[0, 2])
-ax2.scatter(bin_c_gs, vario_gs_builtin, s=15, label="gs.vario_estimate")
+ax2.scatter(bin_c_gs, vario_gs_builtin, s=15, label="gs.vario_estimate (1 real.)")
 ax2.plot(h_th, gamma_th, 'k--', lw=2, label="teoretický")
+ax2.axhline(1.0, color='gray', ls=':', lw=1)
 ax2.set_title("GSTools vario_estimate (1 realizace)")
-ax2.set_xlabel("h [m]"); ax2.set_xlim(0, h_max); ax2.legend(fontsize=8); ax2.grid(True, alpha=0.3)
+ax2.set_xlabel("h [m]"); ax2.set_xlim(0, h_max)
+ax2.set_ylim(0, 1.6)   # cap y axis – single-realisation overshoot is expected
+ax2.legend(fontsize=8); ax2.grid(True, alpha=0.3)
 
 # 2D vizualizace
 ax3 = fig.add_subplot(layout[1, 0])
