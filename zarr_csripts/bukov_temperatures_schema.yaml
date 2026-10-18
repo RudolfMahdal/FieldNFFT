@@ -3,10 +3,8 @@ ATTRS:
     #STORE_URL: "bukov.zarr"
 
     # S3 store for data up to 2024
-    STORE_URL: "s3://bukov/temperature_monitoring.zarr"
-    #STORE_URL: "s3://bukov/rancher-bukov-moc-test.zarr"
-    #STORE_URL: "file://bukov_temperature_monitoring.zarr"
-    S3_ENDPOINT_URL: "https://s3.cl2.du.cesnet.cz"
+    STORE_URL: "s3://random-tensor-fields/temperature_monitoring_steady.zarr"
+    S3_ENDPOINT_URL: "https://s3.cl4.du.cesnet.cz"
 
     #store_type: 'local'                 # 'guess' type is default
     location_file: &loc_file bukov_locations.csv

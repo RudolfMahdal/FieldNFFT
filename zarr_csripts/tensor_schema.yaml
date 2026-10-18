@@ -1,0 +1,37 @@
+ATTRS:
+    STORE_URL: "s3://random-tensor-fields/tensor_test.zarr" #TODO: změnit na budouci realny store
+    S3_ENDPOINT_URL: "https://s3.cl4.du.cesnet.cz"
+
+tensors:
+    VARS:
+        value:
+            unit: ""
+            description: "Komponenty tenzoru v elementu pro daný vzorek."
+            coords: ["s_id", "el_id", "tensor_comp"]
+        barycenter:
+            unit: "m"
+            description: "Těžiště elementu."
+            coords: ["el_id", "xyz"]
+    COORDS:
+        s_id:
+            type: "int"
+            unit: ""
+            description: "Index realizace (vzorku)."
+            chunk_size: 64
+        el_id:
+            type: "int"
+            unit: ""
+            description: "Index elementu sítě."
+            chunk_size: 4096
+        tensor_comp:
+            type: "str[8]"
+            unit: ""
+            description: "Komponenta tenzoru."
+            chunk_size: 6
+        xyz:
+            type: "str[1]"
+            unit: ""
+            description: "Osa souřadnice těžiště."
+            chunk_size: 3
+    ATTRS:
+        description: "Tenzorová náhodná pole."

@@ -1,5 +1,0 @@
-ATTRS:
-  STORE_URL: "s3://bp_mahdal_bukov/temperature_monitoring.zarr"
-
-VARS: {}
-COORDS: {}
