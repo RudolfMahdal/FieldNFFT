@@ -1,7 +1,7 @@
 """Zkouška tenzorových funkcí na malých vymyšlených datech (bez načítání z úložiště)."""
 import numpy as np
 
-from tensor_funcs import (comps_to_matrix, matrix_to_comps, tensor_to_vector, vector_to_tensor,
+from src.tensor_funcs import (comps_to_matrix, matrix_to_comps, tensor_to_vector, vector_to_tensor,
                           fit_normalization, normalize, denormalize)
 
 # --- 1) jeden tenzor ------------------------------------------------------------------

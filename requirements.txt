@@ -1,0 +1,21 @@
+# Python dependencies for the project
+numpy
+scipy
+pandas
+matplotlib
+
+# Gstools and NFFT
+gstools
+finufft
+
+# Data: zarr_fuse and xarray
+zarr_fuse @ git+https://github.com/geomop/zarr_fuse.git
+xarray
+zarr
+dask
+s3fs
+
+# Tests
+pytest
+
+scikit-learn
