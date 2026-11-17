@@ -51,13 +51,19 @@ def empirical_variogram(z, i, j, distances, bins):
     return gam, cnt
 
 
-def generate_ensemble(x_shifted, specs, n_real=20, seed=1000):
-    """Generates (n_real, M, 6) synthetic fields; components are independent. NO post-scaling."""
+def generate_ensemble(x_shifted, specs, n_real=20, seed=1000, L_matrix=None):
+    """Generates (n_real, M, 6) synthetic fields.
+    If L_matrix (6x6) is provided, applies Cholesky mixing to correlate components."""
     M = len(x_shifted)
     out = np.empty((n_real, M, len(specs)))
     for r in range(n_real):
         for c, spec in enumerate(specs):
             out[r, :, c] = generate_grf(x_shifted, spec, seed=seed + len(specs) * r + c)
+            
+    if L_matrix is not None:
+        # Matrix multiplication: (n_real, M, 6) @ (6, 6).T -> (n_real, M, 6)
+        out = out @ L_matrix.T
+        
     return out
 
 

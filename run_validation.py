@@ -1,10 +1,11 @@
 import os
+import numpy as np
 
 from src.data import load_split_data, domain_setup
 from src.spectral import fit_empirical_spectra
-import numpy as np
 from src.validation import (generate_ensemble, variogram_report,
                             make_pairs, make_bins, empirical_variogram)
+
 def main():
     ZARR_URL = "s3://random-tensor-fields/homogenization_sampling_01.zarr"
     SCHEMA, GROUP = "data_schema.yaml", "tensors"
@@ -22,17 +23,24 @@ def main():
     print("Estimating spectrum from TRAINING data only (non-parametric)...")
     specs = fit_empirical_spectra(x, d.z_train, w, L, N_FREQ, target_variance=1.0)
 
-    print(f"Generating synthetic fields ({N_REAL} realizations, FINUFFT type 2)...")
-    z_synth = generate_ensemble(x, specs, n_real=N_REAL)
+    # Calculate Cholesky decomposition of the component correlation matrix
+    print("Calculating component cross-correlations (Cholesky decomposition)...")
+    z_flat = d.z_train.reshape(-1, 6)
+    corr_matrix = np.corrcoef(z_flat, rowvar=False)
+    L_matrix = np.linalg.cholesky(corr_matrix)
 
-        # nugget calibration from TRAINING data only
-    i, j, dist = make_pairs(d.barycenters)       # same pairs/bins as variogram_report
+    print(f"Generating synthetic fields ({N_REAL} realizations, FINUFFT type 2)...")
+    z_synth = generate_ensemble(x, specs, n_real=N_REAL, L_matrix=L_matrix)
+
+    # nugget calibration from TRAINING data only
+    i, j, dist = make_pairs(d.barycenters)
     bins = make_bins(dist)
     g_tr, cnt = empirical_variogram(d.z_train, i, j, dist, bins)
     g_sy = np.mean([empirical_variogram(z, i, j, dist, bins)[0] for z in z_synth], axis=0)
     k0 = int(np.flatnonzero(cnt > 0)[0])         # first non-empty bin
     tau = np.clip(g_tr[k0] - g_sy[k0], 0.0, None)  # (6,) nugget variance per component
     print(f"  nugget tau per component (bin {k0}):", np.round(tau, 3))
+    
     rng = np.random.default_rng(123)
     z_synth = z_synth + rng.standard_normal(z_synth.shape) * np.sqrt(tau)
     
@@ -47,7 +55,6 @@ def main():
               f"var synth = {m['var_synth'][c]:.3f}, var val = {m['var_val'][c]:.3f}")
 
     print(f"\nFull validation plot saved to: {plot_dir}/validation_variograms.png")
-
 
 if __name__ == "__main__":
     main()
