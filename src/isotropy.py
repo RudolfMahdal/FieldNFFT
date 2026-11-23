@@ -1,4 +1,4 @@
-"""src/isotropy.py – Funkce pro test izotropie a normality Fourierových koeficientů."""
+"""src/isotropy.py – Functions for testing isotropy and normality of Fourier coefficients."""
 from __future__ import annotations
 
 import finufft
@@ -7,7 +7,7 @@ from scipy.stats import shapiro
 
 
 def compute_directional_spectra(x_shifted, z_train, w, L, N_freq=64):
-    """Krok 4: Počítá 1D spektrální hustoty podél os X, Y, Z pro ověření izotropie."""
+    """Computes 1D spectral densities along the X, Y, and Z axes to verify isotropy."""
     x_nu = [(x_shifted[:, i] / L) * 2.0 * np.pi - np.pi for i in range(3)]
     
     acc_spec = np.zeros((N_freq, N_freq, N_freq))
@@ -18,7 +18,7 @@ def compute_directional_spectra(x_shifted, z_train, w, L, N_freq=64):
             z = z_train[s, :, c]
             f_hat = finufft.nufft3d1(*x_nu, (z * w).astype(np.complex128), (N_freq, N_freq, N_freq))
             P = np.abs(f_hat) ** 2 / L ** 3
-            P -= np.sum((w * z) ** 2) / L ** 3  # Odečtení shot-noise
+            P -= np.sum((w * z) ** 2) / L ** 3  # Shot-noise subtraction
             acc_spec += P
 
     P_mean = acc_spec / (n_samples * n_comps)
@@ -32,7 +32,7 @@ def compute_directional_spectra(x_shifted, z_train, w, L, N_freq=64):
 
 
 def test_fourier_normality(x_shifted, z_train, w, L, N_freq=32, max_samples=5000):
-    """Krok 5: Seskupí Fourierovy koeficienty do radiálních slupek a otestuje Gaussovo rozdělení."""
+    """Groups Fourier coefficients into radial shells and tests for Gaussianity."""
     x_nu = [(x_shifted[:, i] / L) * 2.0 * np.pi - np.pi for i in range(3)]
     k = np.arange(-N_freq // 2, N_freq // 2)
     kx, ky, kz = np.meshgrid(k, k, k, indexing="ij")
@@ -41,7 +41,7 @@ def test_fourier_normality(x_shifted, z_train, w, L, N_freq=32, max_samples=5000
     n_samples = z_train.shape[0]
     coeffs_list = []
     for s in range(n_samples):
-        z = z_train[s, :, 0]  # složka xx
+        z = z_train[s, :, 0]  # xx component
         f_hat = finufft.nufft3d1(*x_nu, (z * w).astype(np.complex128), (N_freq, N_freq, N_freq))
         coeffs_list.append(f_hat.ravel())
         
