@@ -28,6 +28,17 @@ import finufft
 # =============================================================================
 # CORRELATION / SPECTRAL DENSITY MODELS
 # =============================================================================
+from typing import Protocol
+
+
+class SpectralModel(Protocol):
+    """Interface for any spectral density model (parametric or empirical)."""
+    L: float
+    N_freq: int
+    dim: int
+    f_points: np.ndarray
+
+    def spectral_density(self, omega_mag: np.ndarray) -> np.ndarray: ...
 
 @dataclass
 class GaussianCorrelation:
@@ -147,7 +158,7 @@ def make_white_noise(
 
 def generate_grf(
     x_points: np.ndarray,
-    corr: GaussianCorrelation,
+    corr: GaussianCorrelation | SpectralModel,
     weights: np.ndarray | None = None,
     seed: int | None = None,
 ) -> np.ndarray:
