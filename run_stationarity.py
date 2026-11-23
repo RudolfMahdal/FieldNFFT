@@ -8,9 +8,11 @@ from src.stationarity import stationarity_report
 
 COMPS = ["xx", "yy", "zz", "xy", "xz", "yz"]
 
+
 def exp_variogram(h: np.ndarray, sill: float, l_c: float) -> np.ndarray:
     """Theoretical exponential variogram: gamma(h) = sill * (1 - exp(-h / l_c))."""
     return sill * (1.0 - np.exp(-h / l_c))
+
 
 def main():
     ZARR_URL = "s3://random-tensor-fields/homogenization_sampling_01.zarr"
@@ -25,33 +27,34 @@ def main():
     out_dir = os.path.join("plots", "stationarity")
     os.makedirs(out_dir, exist_ok=True)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 65)
     print("PART 1: STATIONARITY TEST ON RAW (UNNORMALIZED) DATA")
-    print("="*60)
+    print("=" * 65)
     
-    # Reconstruct raw (unnormalized) data
     v_train_raw = d.z_train * d.sd + d.mu
-    
-    # Run the raw stationarity report (this will print its own results in Czech, 
-    # but we will wrap it in our english pipeline)
     stationarity_report(v_train_raw, d.z_train, d.barycenters, plot_dir=out_dir)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 65)
     print("PART 2: STATIONARITY TEST ON NORMALIZED DATA (READY FOR FINUFFT)")
-    print("="*60)
+    print("=" * 65)
     
     m = z.mean(axis=0)  # (M, 6)
     v = z.var(axis=0)   # (M, 6)
     A = np.c_[np.ones(len(x)), x / L]
     
     print("\n--- Spatial Trend of Mean and Variance ---")
+    print(f"Expected local_mean std (pure noise): ~{1/np.sqrt(len(z)):.3f}")
+    print(f"{'Comp':>4} | {'Mean(z)':>8} | {'Local mean std':>14} | {'Var trend (x, y, z)':>24}")
+    print("-" * 59)
     for c, name in enumerate(COMPS):
         coef = np.linalg.lstsq(A, v[:, c], rcond=None)[0]
-        print(f"{name:>2}: mean(z)={m[:, c].mean():+.3f}, std(local_mean)={m[:, c].std():.3f} "
-              f"(expected ~{1/np.sqrt(len(z)):.3f}), var trend (x,y,z)={coef[1:].round(3)}")
+        tx, ty, tz = coef[1:]
+        print(f"{name:>4} | {m[:, c].mean():>+8.3f} | {m[:, c].std():>14.3f} | [{tx:>6.3f}, {ty:>6.3f}, {tz:>6.3f}]")
 
     # Auto-variograms and correlation length (l_c) extraction
-    print("\n--- Fitting Correlation Lengths (l_c) ---")
+    print("\n--- Correlation Length Fit (Exponential Variogram) ---")
+    print(f"{'Comp':>4} | {'Sill':>7} | {'l_c [m]':>9}")
+    print("-" * 26)
     i, j, dist = make_pairs(d.barycenters, num_pairs=200_000, seed=42)
     bins = make_bins(dist, num_bins=25)
     centers = 0.5 * (bins[:-1] + bins[1:])
@@ -64,7 +67,6 @@ def main():
     for c, name in enumerate(COMPS):
         valid = ~np.isnan(g_auto[:, c])
         try:
-            # Fit sill and correlation length (l_c)
             popt, _ = curve_fit(
                 exp_variogram, 
                 centers[valid], 
@@ -74,12 +76,11 @@ def main():
             )
             sill_fit, lc_fit = popt
             fit_results[name] = (sill_fit, lc_fit)
-            print(f"{name:>2}: Sill = {sill_fit:.3f}, Correlation length l_c = {lc_fit:.3f} m")
+            print(f"{name:>4} | {sill_fit:>7.3f} | {lc_fit:>9.3f}")
         except Exception as e:
             fit_results[name] = (np.nan, np.nan)
-            print(f"{name:>2}: Fit failed ({e})")
+            print(f"{name:>4} | Fit failed ({e})")
 
-        # Plot individual components
         ax = axes.ravel()[c]
         ax.plot(centers[valid], g_auto[valid, c], 'bo-', ms=4, label='Empirical variogram')
         if not np.isnan(fit_results[name][1]):
@@ -101,6 +102,8 @@ def main():
 
     # Cross-variograms (correlations between components)
     print("\n--- Cross-Variograms (Component Correlations) ---")
+    print(f"{'Pair':>6} | {'Bin 1':>7} | {'Bin 8':>7} | {'Bin 16':>7}")
+    print("-" * 36)
     b = np.digitize(dist, bins) - 1
     ok = (b >= 0) & (b < len(bins) - 1)
     dz = z[:, i, :] - z[:, j, :]
@@ -110,7 +113,10 @@ def main():
         prod = (dz[:, :, a] * dz[:, :, bb]).mean(axis=0)
         cnt = np.bincount(b[ok], minlength=len(bins) - 1)
         g_cross = 0.5 * np.bincount(b[ok], weights=prod[ok], minlength=len(bins) - 1)[cnt > 0] / cnt[cnt > 0]
-        print(f"Cross {COMPS[a]}-{COMPS[bb]:<2}: gamma at bins [1, 8, 16] = {g_cross[[1, 8, 16]].round(3)}")
+        g1, g8, g16 = g_cross[[1, 8, 16]]
+        pair_name = f"{COMPS[a]}-{COMPS[bb]}"
+        print(f"{pair_name:>6} | {g1:>+7.3f} | {g8:>+7.3f} | {g16:>+7.3f}")
+
 
 if __name__ == "__main__":
     main()

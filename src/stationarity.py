@@ -44,8 +44,8 @@ def trend_report(v_train, seed=0):
     lsd_A, lsd_B = np.log(v_train[A].std(0)), np.log(v_train[B].std(0))
     pooled_sd = v_train.std(0).mean(0)
 
-    mean_sig, mean_cov = _signal_std(mu_A, mu_B)
-    sd_sig, sd_cov = _signal_std(lsd_A, lsd_B)
+    mean_sig, _ = _signal_std(mu_A, mu_B)
+    sd_sig, _ = _signal_std(lsd_A, lsd_B)
     # correlation of halves: ~0 = just noise, ~1 = true physical structure
     corr = lambda a, b: np.array([np.corrcoef(a[:, c], b[:, c])[0, 1] for c in range(6)])
     return {
@@ -92,19 +92,23 @@ def stationarity_report(v_train, z_train, barycenters, plot_dir=None):
         h, g = subregion_variograms(z_train, barycenters, ax)
         var_diff[nm] = np.sqrt(np.nanmean((g["low"] - g["high"]) ** 2, axis=0))
 
-    print("\n=== RAW DATA STATIONARITY REPORT ===")
-    print("1) Spatial mean trend: true trend std / pooled sd  (0 = constant)")
-    print("   comp  trend/sd   halves correlation   [estimation noise = %.2f]" % tr["noise_mean_ratio"][0])
+    print("\n--- Spatial Trends & Sample Offsets ---")
+    print(f"Estimation noise reference (1/sqrt(S/2)): {tr['noise_mean_ratio'][0]:.2f}")
+    print(f"{'Comp':>4} | {'Mean trend/sd':>13} | {'Mean corr':>9} | {'SD CV':>7} | {'SD corr':>7} | {'Offset std':>10}")
+    print("-" * 65)
     for c, n in enumerate(COMPS):
-        print(f"   {n}:   {tr['mean_trend_ratio'][c]:.3f}      {tr['mean_half_corr'][c]:+.2f}")
-    print("2) Spatial variance trend: true sd(x) trend CV")
-    for c, n in enumerate(COMPS):
-        print(f"   {n}:   CV = {tr['sd_cv'][c]:.3f}      halves correlation {tr['sd_half_corr'][c]:+.2f}")
-    print("3) Sample offset level (spatial mean std of normalized data; 0 = none)")
-    print("   " + "  ".join(f"{n}={s:.2f}" for n, s in zip(COMPS, off_std)))
-    print("4) Correlation structure stationarity: Variogram RMSE lower vs upper domain half")
+        print(
+            f"{n:>4} | {tr['mean_trend_ratio'][c]:>13.3f} | {tr['mean_half_corr'][c]:>+9.2f} | "
+            f"{tr['sd_cv'][c]:>7.3f} | {tr['sd_half_corr'][c]:>+7.2f} | {off_std[c]:>10.2f}"
+        )
+
+    print("\n--- Subregion Variogram RMSE (Lower vs Upper Domain Half) ---")
+    header = " | ".join(f"{n:>6}" for n in COMPS)
+    print(f"{'Axis':>4} | {header}")
+    print("-" * 58)
     for nm, v in var_diff.items():
-        print(f"   axis {nm}: " + "  ".join(f"{n}={x:.3f}" for n, x in zip(COMPS, v)))
+        vals = " | ".join(f"{x:>6.3f}" for x in v)
+        print(f"{nm:>4} | {vals}")
 
     if plot_dir:
         os.makedirs(plot_dir, exist_ok=True)
@@ -124,6 +128,8 @@ def stationarity_report(v_train, z_train, barycenters, plot_dir=None):
         axs[2].set_title("Variogram: lower vs upper half (x axis)"); axs[2].set_xlabel("h [m]")
         axs[2].legend(fontsize=7); axs[2].grid(True)
         fig.tight_layout()
-        fig.savefig(os.path.join(plot_dir, "stationarity_raw.png"), dpi=150)
+        plot_path = os.path.join(plot_dir, "stationarity_raw.png")
+        fig.savefig(plot_path, dpi=150)
         plt.close(fig)
+        print(f"\nRaw stationarity plot saved to: {plot_path}")
     return tr, off_std, var_diff
